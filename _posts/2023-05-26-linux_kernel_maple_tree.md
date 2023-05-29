@@ -13,6 +13,7 @@ title: Linux Kernel MapleTree
 > 3. Linux Kernel Source Code
 > 4. [Maple Tree](https://www.kernel.org/doc/html/next/core-api/maple_tree.html)
 > 5. [Youtube The Linux Maple Tree - Matthew Wilcox, Oracle](https://www.youtube.com/watch?v=XwukyRAL7WQ)
+> 6. [Youtube PPT](https://static.sched.com/hosted_files/ossna19/79/20190822_LinuxCon_Maple_Tree.pdf)
 
 ## MapleTree 介绍
 
