@@ -14,6 +14,7 @@ title: Linux Kernel MapleTree
 > 4. [Maple Tree](https://www.kernel.org/doc/html/next/core-api/maple_tree.html)
 > 5. [Youtube The Linux Maple Tree - Matthew Wilcox, Oracle](https://www.youtube.com/watch?v=XwukyRAL7WQ)
 > 6. [Youtube PPT](https://static.sched.com/hosted_files/ossna19/79/20190822_LinuxCon_Maple_Tree.pdf)
+> 7. [Maple Tree v2 Patches For The Linux Kernel - 13~840% Faster For Malloc Threads Test Case](https://www.phoronix.com/news/Maple-Tree-v2)
 
 ## MapleTree 介绍
 
@@ -34,6 +35,10 @@ title: Linux Kernel MapleTree
 
 ### 2. MapleTree 是什么
 
+MapleTree 是一种多叉树的数据结构，针对虚拟内存管理场景额外支持了范围查找，RCU 支持，以及针对缓存机制进行了优化可以快速访问前继和后继节点。
 
+> 这里提及的针对缓存机制进行的优化指的是：MapleTree 类似与 RadixTree，管理节点与被管理的结构体是分离的存在，在管理节点中存储指向结构体的指针。相比于 RBtree 的嵌入式结构的优势在于：遍历和查找前后节点的过程中只需要将管理节点占用的内存加载到缓存中，一方面是遍历过程中不需要将部分遍历不关心的数据加载到缓存中，另一方面是可以在一条 cacheLine 中缓存多个节点提高了遍历过程中的访存效率。
+
+下图是 RBtree，RadixTree，MapleTree 的具体区别：
 
 ![image-20230528235709683](https://github.com/HanpiJoker/hanpijoker.github.io/raw/master/Pictures/image_20230526_LinuxMapleTree_001.png)
