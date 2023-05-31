@@ -15,6 +15,8 @@ title: Linux Kernel MapleTree
 > 5. [Youtube The Linux Maple Tree - Matthew Wilcox, Oracle](https://www.youtube.com/watch?v=XwukyRAL7WQ)
 > 6. [Youtube PPT](https://static.sched.com/hosted_files/ossna19/79/20190822_LinuxCon_Maple_Tree.pdf)
 > 7. [Maple Tree v2 Patches For The Linux Kernel - 13~840% Faster For Malloc Threads Test Case](https://www.phoronix.com/news/Maple-Tree-v2)
+> 8. [[PATCH 00/94\] Introducing the Maple Tree - Liam Howlett (kernel.org)](https://lore.kernel.org/linux-mm/20210428153542.2814175-1-Liam.Howlett@Oracle.com/)
+> 9. [rcuvm:asplos12.pdf (mit.edu)](https://pdos.csail.mit.edu/papers/rcuvm:asplos12.pdf)
 
 ## MapleTree 介绍
 
@@ -38,7 +40,81 @@ title: Linux Kernel MapleTree
 MapleTree 是一种多叉树的数据结构，针对虚拟内存管理场景额外支持了范围查找，RCU 支持，以及针对缓存机制进行了优化可以快速访问前继和后继节点。
 
 > 这里提及的针对缓存机制进行的优化指的是：MapleTree 类似与 RadixTree，管理节点与被管理的结构体是分离的存在，在管理节点中存储指向结构体的指针。相比于 RBtree 的嵌入式结构的优势在于：遍历和查找前后节点的过程中只需要将管理节点占用的内存加载到缓存中，一方面是遍历过程中不需要将部分遍历不关心的数据加载到缓存中，另一方面是可以在一条 cacheLine 中缓存多个节点提高了遍历过程中的访存效率。
+>
+> 这里后续看代码发现，MapleTree 设计节点的时候，保证了节点的结构体大小是固定的 256Byte，这是常用的 cacheline size 的整数倍。
 
 下图是 RBtree，RadixTree，MapleTree 的具体区别：
 
 ![image-20230528235709683](https://github.com/HanpiJoker/hanpijoker.github.io/raw/master/Pictures/image_20230526_LinuxMapleTree_001.png)
+
+### 3. MapleTree 带来的具体提升
+
+目前上述的邮件连接中给出了一部分的性能测试数据，不过由于在测试的过程中还是使用 mmap_sem 保证代码的原子性的，所以在并发的优化上还没有真正体现。
+
+> **While still using the mmap_sem, the performance seems fairly similar on real-world workloads, while there are variations in micro-benchmarks.**
+>
+> **Increase in performance in the following micro-benchmarks in Hmean:**
+> **- wis malloc1-threads: Increase of 13% to 840%**
+> **- wis page_fault1-threads: Increase of 1% to 14%**
+> **- wis brk1-threads: Disregard, this test is invalid.**
+>
+> 
+> **Decrease in performance in the following micro-benchmarks in Hmean:**
+> **- wis brk1-processes: Decrease of 45% due to RCU required**
+>
+> **Mixed:**
+> **- wis pthread_mutex1-threads: +11% to -3%**
+> **- wis signal1-threads: +6% to -12%**
+> **- wis malloc1-processes: +9% to -18% (-18 at 2 processes, increases after)**
+> **- wis page_fault3-threads: +8% to -22%**
+
+这里的性能测试使用的是 micro-benchmark 进行测试的，针对不同的测试项有不同的表现。不过具体每个测试项的侧重点是什么，这是暂时不太清楚的。需要后续针对 micro-benchmark 做一个调研。总体来看提升还是比较明显的。
+
+## MapleTree 的原理
+
+> MapleTree 的代码解析和原理实现比较复杂，这里还需要时间去进一步学习。
+
+## MapleTree 的使用
+
+MapleTree 暴露的接口分为两部分：基础接口(mt_xxx 为前缀)和高级接口(mas_xxx 为前缀)
+
+### 1. 基础接口的使用
+
+```c
+// 根节点结构体
+struct maple_tree {
+	union {
+        spinlock_t ma_lock;
+        lockdep_map_p ma_external_lock;
+    };
+    void __rcu *ma_root;
+    unsigned int ma_flags;
+}
+// 1. 初始化 mapletree
+MTREE_INIT(name, __flags); // 静态初始化一个 maple tree
+MTREE_INIT_EXT(name, __flags, __lock); // 静态初始化一个使用外部锁的 maple tree
+mt_init_flags(struct maple_tree *mt, unsigned int flags); // 函数调用初始化一个 maple tree
+
+// 2. 节点插入
+// mtree_insert_xx 如果传入范围或是 index 是空闲的就将 entry 插入；
+mtree_insert(struct maple_tree *mt, unsigned long index, void *entry, gfp_t gfp);
+mtree_insert_range(struct maple_tree *mt, unsigned long first, unsigned long last, void *entry, gfp_t gfp);
+// mtree_store_xx 对传入范围或是 index 进行覆盖；
+mtree_store(struct maple_tree *mt, unsigned long index, void *entry, gfp_t gfp);
+mtree_store_range(struct maple_tree *mt, unsigned long first, unsigned long last, void *entry, gfp_t gfp);
+// mtree_alloc_xx 从指定区间找到一段空闲的空间插入；
+mtree_alloc_range(struct maple_tree *mt, unsigned long *strartp, void *entry, unsigned long size, unsigned long min, unsigned long max, gfp_t gfp);
+mtree_alloc_rrange(struct maple_tree *mt, unsigned long *strartp, void *entry, unsigned long size, unsigned long min, unsigned long max, gfp_t gfp);
+
+// 3. 节点查找
+mtree_load(struct maple_tree *mt, unsigned long index);
+
+// 4. 节点删除
+mtree_erase(struct maple_tree *mt, unsigned long index);
+
+// 5. maple tree 销毁
+mtree_destroy(struct maple_tree *mt);
+```
+
+### 3. 高级接口的使用
+
