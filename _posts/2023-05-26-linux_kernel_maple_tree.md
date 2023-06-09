@@ -68,7 +68,7 @@ MapleTree 是一种多叉树的数据结构，针对虚拟内存管理场景额�
 > **- wis malloc1-processes: +9% to -18% (-18 at 2 processes, increases after)**
 > **- wis page_fault3-threads: +8% to -22%**
 
-这里的性能测试使用的是 micro-benchmark 进行测试的，针对不同的测试项有不同的表现。不过具体每个测试项的侧重点是什么，这是暂时不太清楚的。需要后续针对 micro-benchmark 做一个调研。总体来看提升还是比较明显的。
+这里的性能测试使用的是 micro-benchmark 进行测试的，针对不同的测试项有不同的表现。不过具体每个测试项的侧重点是什么，这是暂时不太清楚的。目前由于 VMA 只是简单将 RBtree + LinkedList 替换为 MapleTree，还没有对锁的使用进行优化。所以这里看到的提升主要针对与 cache miss 的优化。还看不到使用 RCU 之后针对并发的优化。
 
 ## MapleTree 的原理
 
@@ -76,7 +76,7 @@ MapleTree 是一种多叉树的数据结构，针对虚拟内存管理场景额�
 
 ## MapleTree 的使用
 
-MapleTree 暴露的接口分为两部分：基础接口(mt_xxx 为前缀)和高级接口(mas_xxx 为前缀)
+MapleTree 暴露的接口分为两部分：基础接口(mtree_xxx 为前缀)和高级接口(mas_xxx 为前缀)
 
 ### 1. 基础接口的使用
 
@@ -89,7 +89,30 @@ struct maple_tree {
     };
     void __rcu *ma_root;
     unsigned int ma_flags;
-}
+};
+
+// 子结点结构体
+struct maple_node {
+	union {
+		struct {
+			struct maple_pnode *parent;
+			void __rcu *slot[MAPLE_NODE_SLOTS];
+		};
+		struct {
+			void *pad;
+			struct rcu_head rcu;
+			struct maple_enode *piv_parent;
+			unsigned char parent_slot;
+			enum maple_type type;
+			unsigned char slot_len;
+			unsigned int ma_flags;
+		};
+		struct maple_range_64 mr64;  // 普通的节点，支持范围查找的结构体句柄；
+		struct maple_arange_64 ma64; // 会保留空闲地址段的(gap) 的结构体句柄；
+ 		struct maple_alloc alloc;  // 用于节点申请和释放的时候的相关信息
+	};
+};
+
 // 1. 初始化 mapletree
 MTREE_INIT(name, __flags); // 静态初始化一个 maple tree
 MTREE_INIT_EXT(name, __flags, __lock); // 静态初始化一个使用外部锁的 maple tree
@@ -107,7 +130,9 @@ mtree_alloc_range(struct maple_tree *mt, unsigned long *strartp, void *entry, un
 mtree_alloc_rrange(struct maple_tree *mt, unsigned long *strartp, void *entry, unsigned long size, unsigned long min, unsigned long max, gfp_t gfp);
 
 // 3. 节点查找
-mtree_load(struct maple_tree *mt, unsigned long index);
+mtree_load(struct maple_tree *mt, unsigned long index); // 根据传入的 index 单点查找
+mt_find(struct maple_tree *mt, unsigned long *index, unsigned long max); // 根据范围查找节点
+mt_for_each(__tree, __entry, __index, __max)；// 查找在区间内的多个节点
 
 // 4. 节点删除
 mtree_erase(struct maple_tree *mt, unsigned long index);
@@ -117,4 +142,35 @@ mtree_destroy(struct maple_tree *mt);
 ```
 
 ### 3. 高级接口的使用
+
+高级接口相比基础接口提供了更高的灵活性，在使用上也可以与基础接口混用。以下针对高级接口的使用介绍源自于内核的 Documents
+
+```c
+// 高级接口的核心是 struct ma_state 结构体, 主要用于跟踪后续操作过程的相关信息
+struct ma_state {
+	struct maple_tree *tree;	/* The tree we're operating in */
+	unsigned long index;		/* The index we're operating on - range start */
+	unsigned long last;		/* The last index we're operating on - range end */
+	struct maple_enode *node;	/* The node containing this entry */
+	unsigned long min;		/* The minimum index of this node - implied pivot min */
+	unsigned long max;		/* The maximum index of this node - implied pivot max */
+	struct maple_alloc *alloc;	/* Allocated nodes for this operation */
+	unsigned char depth;		/* depth of tree descent during write */
+	unsigned char offset;
+	unsigned char mas_flags;
+};
+
+// 使用高级接口前使用下面的宏定义声明和定义一个 struct ma_state
+#define MA_STATE(name, mt, first, end)					\
+	struct ma_state name = {					\
+		.tree = mt,						\
+		.index = first,						\
+		.last = end,						\
+		.node = MAS_START,					\
+		.min = 0,						\
+		.max = ULONG_MAX,					\
+		.alloc = NULL,						\
+		.mas_flags = 0,						\
+	}
+```
 
