@@ -12,7 +12,7 @@ title: Create A New Development Environment
 
 ```shell
 sudo apt install git zsh python3 python3-pip python3-venv curl xclip ripgrep \
-    fd-find libevent-dev flex bison flex-doc bison-doc
+    fd-find libevent-dev flex bison flex-doc bison-doc xclip
 
 # install github cli
 (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
@@ -23,8 +23,6 @@ sudo apt install git zsh python3 python3-pip python3-venv curl xclip ripgrep \
 && sudo apt update \
 && sudo apt install gh -y
 
-# install neovide
-https://github.com/neovide/neovide/releases
 ```
 
 ### 通过链接下载的安装包
@@ -38,6 +36,9 @@ https://github.com/neovide/neovide/releases
 - [wps fonts](https://github.com/xChen16/wps-fonts)
 
 - [wps](https://www.wps.cn/)
+
+- [neovide](https://github.com/neovide/neovide/releases)
+```
 
 ## 软件配置
 
@@ -74,7 +75,7 @@ curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh 
 4. 安装插件
 
 ```
-plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-vi-mode)
+plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
 ```
 
 - [zsh-autosuggestions](https://github.com/zsh-users/zsh-autosuggestions/blob/master/INSTALL.md#oh-my-zsh)
@@ -88,13 +89,6 @@ plugins=(git zsh-autosuggestions zsh-syntax-highlighting zsh-vi-mode)
 > ```shell
 > git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 > ```
-
-- [zsh-vi-mode](https://github.com/jeffreytse/zsh-vi-mode)
-
-> ```shell
-> git clone https://github.com/jeffreytse/zsh-vi-mode $ZSH_CUSTOM/plugins/zsh-vi-mode
-> ```
-
 
 ### 利用 Gogh 美化终端界面
 
