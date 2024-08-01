@@ -122,14 +122,14 @@ sudo make install
 ```shell
 git clone -b lua https://github.com/hanpijoker/nvim ~/.config/nvim
 
-sudo npm install tree-sitter-cli
+sudo npm install -g tree-sitter-cli
 
 sudo npm install -g neovim
 
 sudo python3 -m pip install --upgrade pynvim
 
 # After neovim Lazy install
-# need use Mason Install `stylua` and `selena` `shellcheck`
+# need use Mason Install `stylua` and `selena` `shellcheck` `shfmt`
 ```
 
 ### llvm install
